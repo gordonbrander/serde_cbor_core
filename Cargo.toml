@@ -1,11 +1,7 @@
 [package]
 name = "serde_cbor_core"
-version = "0.6.3"
-authors = [
-    "Pyfisch <pyfisch@posteo.org>",
-    "Steven Fackler <sfackler@gmail.com>",
-    "Volker Mische <volker.mische@gmail.com>",
-]
+version = "0.0.1"
+authors = []
 repository = "https://github.com/gordonbrander/serde_cbor_core"
 readme = "README.md"
 license = "MIT/Apache-2.0"
