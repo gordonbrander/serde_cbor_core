@@ -49,7 +49,7 @@
 //!     // the data will not change in any way.
 //!     let tux: Mascot = serde_cbor_core::from_reader(tux_reader)?;
 //!
-//!     println!("{:?}", tux);
+//!     println!("{tux:?}");
 //!     // prints: Mascot { name: "Tux", species: "penguin", year_of_birth: 1996 }
 //!
 //!     Ok(())
