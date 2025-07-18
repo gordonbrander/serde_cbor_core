@@ -9,12 +9,10 @@ use std::borrow::Cow;
 
 use cbor4ii::core::dec::{self, Decode};
 use cbor4ii::core::{major, types, utils::SliceReader};
-use ipld_core::cid::serde::CID_SERDE_PRIVATE_IDENTIFIER;
 use serde::de::{self, Visitor};
 
 use crate::cbor4ii_nonpub::{marker, peek_one, pull_one};
 use crate::error::DecodeError;
-use crate::CBOR_TAGS_CID;
 #[cfg(feature = "std")]
 use cbor4ii::core::utils::IoReader;
 
@@ -25,7 +23,7 @@ use cbor4ii::core::utils::IoReader;
 /// Deserialize a `String`
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: Vec<u8> = vec![0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let value: String = de::from_slice(&v[..]).unwrap();
 /// assert_eq!(value, "foobar");
@@ -34,7 +32,7 @@ use cbor4ii::core::utils::IoReader;
 /// Deserialize a borrowed string with zero copies.
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: Vec<u8> = vec![0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let value: &str = de::from_slice(&v[..]).unwrap();
 /// assert_eq!(value, "foobar");
@@ -57,7 +55,7 @@ where
 /// Deserialize a `String`
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: Vec<u8> = vec![0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let value: String = de::from_reader(&v[..]).unwrap();
 /// assert_eq!(value, "foobar");
@@ -66,7 +64,7 @@ where
 /// Note that `from_reader` cannot borrow data:
 ///
 /// ```compile_fail
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: Vec<u8> = vec![0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let value: &str = de::from_reader(&v[..]).unwrap();
 /// assert_eq!(value, "foobar");
@@ -96,7 +94,7 @@ where
 /// Deserialize a `String`
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: &[u8] = &[0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let mut reader = std::io::Cursor::new(v);
 /// let value: String = de::from_reader_once(&mut reader).unwrap();
@@ -130,7 +128,7 @@ where
 /// Deserialize several `String` values
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: &[u8] = &[0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let mut reader = std::io::Cursor::new(v);
 /// let mut iter = de::iter_from_reader::<String, _>(&mut reader);
@@ -204,19 +202,15 @@ impl<'de, R: dec::Read<'de>> Deserializer<R> {
     }
 
     #[inline]
-    fn deserialize_cid<V>(&mut self, visitor: V) -> Result<V::Value, DecodeError<R::Error>>
+    fn deserialize_tag<V>(&mut self, _visitor: V) -> Result<V::Value, DecodeError<R::Error>>
     where
         V: Visitor<'de>,
     {
         let tag = dec::TagStart::decode(&mut self.reader)?;
-
-        match tag.0 {
-            CBOR_TAGS_CID => visitor.visit_newtype_struct(&mut CidDeserializer(self)),
-            _ => Err(DecodeError::TypeMismatch {
-                name: "CBOR tag",
-                byte: tag.0 as u8,
-            }),
-        }
+        Err(DecodeError::TypeMismatch {
+            name: "CBOR tag",
+            byte: tag.0 as u8,
+        })
     }
 
     /// This method should be called after a value has been deserialized to ensure there is no
@@ -321,7 +315,7 @@ impl<'de, R: dec::Read<'de>> serde::Deserializer<'de> for &mut Deserializer<R> {
             major::ARRAY => de.deserialize_seq(visitor),
             major::MAP => de.deserialize_map(visitor),
             // The only supported tag is tag 42 (CID).
-            major::TAG => de.deserialize_cid(visitor),
+            major::TAG => de.deserialize_tag(visitor),
             major::SIMPLE => match byte {
                 marker::FALSE => {
                     de.reader.advance(1);
@@ -454,17 +448,13 @@ impl<'de, R: dec::Read<'de>> serde::Deserializer<'de> for &mut Deserializer<R> {
     #[inline]
     fn deserialize_newtype_struct<V>(
         self,
-        name: &'static str,
+        _name: &'static str,
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        if name == CID_SERDE_PRIVATE_IDENTIFIER {
-            self.deserialize_cid(visitor)
-        } else {
-            visitor.visit_newtype_struct(self)
-        }
+        visitor.visit_newtype_struct(self)
     }
 
     #[inline]
@@ -771,15 +761,8 @@ struct CidDeserializer<'a, R>(&'a mut Deserializer<R>);
 impl<'de, 'a, R: dec::Read<'de>> de::Deserializer<'de> for &'a mut CidDeserializer<'a, R> {
     type Error = DecodeError<R::Error>;
 
-    #[cfg(not(feature = "no-cid-as-bytes"))]
     fn deserialize_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         self.deserialize_bytes(visitor)
-    }
-    #[cfg(feature = "no-cid-as-bytes")]
-    fn deserialize_any<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Self::Error> {
-        Err(de::Error::custom(
-            "Only bytes can be deserialized into a CID",
-        ))
     }
 
     #[inline]
@@ -812,18 +795,12 @@ impl<'de, 'a, R: dec::Read<'de>> de::Deserializer<'de> for &'a mut CidDeserializ
 
     fn deserialize_newtype_struct<V: de::Visitor<'de>>(
         self,
-        name: &str,
-        visitor: V,
+        _name: &str,
+        _visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        if name == CID_SERDE_PRIVATE_IDENTIFIER {
-            self.deserialize_bytes(visitor)
-        } else {
-            Err(de::Error::custom([
-                "This deserializer must not be called on newtype structs other than one named `",
-                CID_SERDE_PRIVATE_IDENTIFIER,
-                "`"
-            ].concat()))
-        }
+        Err(de::Error::custom(
+            "This deserializer must not be called on newtype structs",
+        ))
     }
 
     serde::forward_to_deserialize_any! {

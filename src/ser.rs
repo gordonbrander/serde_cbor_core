@@ -11,11 +11,9 @@ use cbor4ii::core::{
     enc::{self, Encode},
     types,
 };
-use ipld_core::cid::serde::CID_SERDE_PRIVATE_IDENTIFIER;
-use serde::{ser, Serialize};
+use serde::Serialize;
 
 use crate::error::EncodeError;
-use crate::CBOR_TAGS_CID;
 
 /// Serializes a value to a vector.
 pub fn to_vec<T>(value: &T) -> Result<Vec<u8>, EncodeError<TryReserveError>>
@@ -196,14 +194,10 @@ impl<'a, W: enc::Write> serde::Serializer for &'a mut Serializer<W> {
     #[inline]
     fn serialize_newtype_struct<T: Serialize + ?Sized>(
         self,
-        name: &'static str,
+        _name: &'static str,
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
-        if name == CID_SERDE_PRIVATE_IDENTIFIER {
-            value.serialize(&mut CidSerializer(self))
-        } else {
-            value.serialize(self)
-        }
+        value.serialize(self)
     }
 
     #[inline]
@@ -418,14 +412,13 @@ impl<W: enc::Write> serde::ser::SerializeTupleVariant for BoundedCollect<'_, W> 
     }
 }
 
-/// CBOR RFC-7049 specifies a canonical sort order, where keys are sorted by length first. This
-/// was later revised with RFC-8949, but we need to stick to the original order to stay compatible
-/// with existing data.
-/// We first serialize each map entry (the key and the value) into a buffer and then sort those
-/// buffers. Once sorted they are written to the actual output.
+/// CBOR RFC-8949 specifies a canonical sort order, where keys are sorted in bytewise
+/// lexicographic order. We serialize keys and values separately, then sort by key bytes only.
+/// Once sorted, the key-value pairs are written to the actual output.
 pub struct CollectMap<'a, W> {
-    buffer: BufWriter,
-    entries: Vec<Vec<u8>>,
+    key_buffer: BufWriter,
+    value_buffer: BufWriter,
+    entries: Vec<(Vec<u8>, Vec<u8>)>, // (key_bytes, value_bytes)
     ser: &'a mut Serializer<W>,
 }
 
@@ -435,7 +428,8 @@ where
 {
     fn new(ser: &'a mut Serializer<W>) -> Self {
         Self {
-            buffer: BufWriter::new(Vec::new()),
+            key_buffer: BufWriter::new(Vec::new()),
+            value_buffer: BufWriter::new(Vec::new()),
             entries: Vec::new(),
             ser,
         }
@@ -446,31 +440,38 @@ where
         maybe_key: Option<&'static str>,
         value: &T,
     ) -> Result<(), EncodeError<W::Error>> {
-        // Instantiate a new serializer, so that the buffer can be re-used.
-        let mut mem_serializer = Serializer::new(&mut self.buffer);
-        if let Some(key) = maybe_key {
-            key.serialize(&mut mem_serializer)
+        // Serialize the key separately
+        let key_bytes = if let Some(key) = maybe_key {
+            let mut key_serializer = Serializer::new(&mut self.key_buffer);
+            key.serialize(&mut key_serializer)
                 .map_err(|_| EncodeError::Msg("Struct key cannot be serialized.".to_string()))?;
-        }
-        value
-            .serialize(&mut mem_serializer)
-            .map_err(|_| EncodeError::Msg("Struct value cannot be serialized.".to_string()))?;
+            let key_bytes = self.key_buffer.buffer().to_vec();
+            self.key_buffer.clear();
+            key_bytes
+        } else {
+            Vec::new()
+        };
 
-        self.entries.push(self.buffer.buffer().to_vec());
-        self.buffer.clear();
+        // Serialize the value separately
+        let mut value_serializer = Serializer::new(&mut self.value_buffer);
+        value
+            .serialize(&mut value_serializer)
+            .map_err(|_| EncodeError::Msg("Struct value cannot be serialized.".to_string()))?;
+        let value_bytes = self.value_buffer.buffer().to_vec();
+        self.value_buffer.clear();
+
+        self.entries.push((key_bytes, value_bytes));
 
         Ok(())
     }
 
     fn end(mut self) -> Result<(), EncodeError<W::Error>> {
-        // This sorting step makes sure we have the expected order of the keys. Byte-wise
-        // comparison over the encoded forms gives us the right order as keys in DAG-CBOR are
-        // always (text) strings, hence have the same CBOR major type 3. The length of the string
-        // is encoded in the prefix bits along with the major type. This means that a shorter string
-        // always sorts before a longer string even with the compact length representation.
-        self.entries.sort_unstable();
-        for entry in self.entries {
-            self.ser.writer.push(&entry)?;
+        // Sort entries by key bytes only in lexicographic order per RFC 8949
+        self.entries.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+        for (key_bytes, value_bytes) in self.entries {
+            self.ser.writer.push(&key_bytes)?;
+            self.ser.writer.push(&value_bytes)?;
         }
         Ok(())
     }
@@ -485,17 +486,29 @@ where
 
     #[inline]
     fn serialize_key<T: Serialize + ?Sized>(&mut self, key: &T) -> Result<(), Self::Error> {
-        // The key needs to be add to the buffer without any further operations. Serializing the
-        // value will then do the necessary flushing etc.
-        let mut mem_serializer = Serializer::new(&mut self.buffer);
-        key.serialize(&mut mem_serializer)
+        // Serialize the key into the key buffer
+        let mut key_serializer = Serializer::new(&mut self.key_buffer);
+        key.serialize(&mut key_serializer)
             .map_err(|_| EncodeError::Msg("Map key cannot be serialized.".to_string()))?;
         Ok(())
     }
 
     #[inline]
     fn serialize_value<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
-        self.serialize(None, value)
+        // Serialize the value into the value buffer
+        let mut value_serializer = Serializer::new(&mut self.value_buffer);
+        value
+            .serialize(&mut value_serializer)
+            .map_err(|_| EncodeError::Msg("Map value cannot be serialized.".to_string()))?;
+
+        // Now store both key and value bytes as a pair
+        let key_bytes = self.key_buffer.buffer().to_vec();
+        let value_bytes = self.value_buffer.buffer().to_vec();
+        self.key_buffer.clear();
+        self.value_buffer.clear();
+
+        self.entries.push((key_bytes, value_bytes));
+        Ok(())
     }
 
     #[inline]
@@ -546,154 +559,5 @@ where
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
         self.end()
-    }
-}
-
-/// Serializing a CID correctly as DAG-CBOR.
-struct CidSerializer<'a, W>(&'a mut Serializer<W>);
-
-impl<'a, W: enc::Write> ser::Serializer for &'a mut CidSerializer<'a, W>
-where
-    W::Error: core::fmt::Debug,
-{
-    type Ok = ();
-    type Error = EncodeError<W::Error>;
-
-    type SerializeSeq = ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeTuple = ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeTupleStruct = ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeTupleVariant = ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeMap = ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeStruct = ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeStructVariant = ser::Impossible<Self::Ok, Self::Error>;
-
-    fn serialize_bool(self, _value: bool) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_i8(self, _value: i8) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_i16(self, _value: i16) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_i32(self, _value: i32) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_i64(self, _value: i64) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_u8(self, _value: u8) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_u16(self, _value: u16) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_u32(self, _value: u32) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_u64(self, _value: u64) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_f32(self, _value: f32) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_f64(self, _value: f64) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_char(self, _value: char) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_str(self, _value: &str) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-
-    fn serialize_bytes(self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
-        // The bytes of the CID is prefixed with a null byte when encoded as CBOR.
-        let prefixed = [&[0x00], value].concat();
-        // CIDs are serialized with CBOR tag 42.
-        types::Tag(CBOR_TAGS_CID, types::Bytes(&prefixed[..])).encode(&mut self.0.writer)?;
-        Ok(())
-    }
-
-    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_some<T: ?Sized + ser::Serialize>(
-        self,
-        _value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_unit_struct(self, _name: &str) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_unit_variant(
-        self,
-        _name: &str,
-        _variant_index: u32,
-        _variant: &str,
-    ) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-
-    fn serialize_newtype_struct<T: ?Sized + ser::Serialize>(
-        self,
-        _name: &str,
-        _value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_newtype_variant<T: ?Sized + ser::Serialize>(
-        self,
-        _name: &str,
-        _variant_index: u32,
-        _variant: &str,
-        _value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_tuple_struct(
-        self,
-        _name: &str,
-        _len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_tuple_variant(
-        self,
-        _name: &str,
-        _variant_index: u32,
-        _variant: &str,
-        _len: usize,
-    ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_struct(
-        self,
-        _name: &str,
-        _len: usize,
-    ) -> Result<Self::SerializeStruct, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
-    }
-    fn serialize_struct_variant(
-        self,
-        _name: &str,
-        _variant_index: u32,
-        _variant: &str,
-        _len: usize,
-    ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        Err(ser::Error::custom("unreachable"))
     }
 }

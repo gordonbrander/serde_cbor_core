@@ -216,12 +216,12 @@ pub enum CodecError {
 impl fmt::Display for CodecError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Decode(error) => write!(f, "decode error: {}", error),
-            Self::Encode(error) => write!(f, "encode error: {}", error),
+            Self::Decode(error) => write!(f, "decode error: {error}"),
+            Self::Encode(error) => write!(f, "encode error: {error}"),
             #[cfg(feature = "std")]
-            Self::DecodeIo(error) => write!(f, "decode io error: {}", error),
+            Self::DecodeIo(error) => write!(f, "decode io error: {error}"),
             #[cfg(feature = "std")]
-            Self::EncodeIo(error) => write!(f, "encode io error: {}", error),
+            Self::EncodeIo(error) => write!(f, "encode io error: {error}"),
         }
     }
 }

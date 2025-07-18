@@ -2,12 +2,12 @@ use std::{collections::BTreeMap, iter};
 
 use serde::de::value::{self, MapDeserializer, SeqDeserializer};
 use serde_bytes::{ByteBuf, Bytes};
-use serde_derive::Serialize;
-use serde_ipld_dagcbor::{
+use serde_cbor_core::{
     from_slice,
     ser::{BufWriter, Serializer},
     to_vec,
 };
+use serde_derive::Serialize;
 
 #[test]
 fn test_string() {
@@ -105,7 +105,7 @@ fn test_ip_addr() {
 
     let addr = Ipv4Addr::new(8, 8, 8, 8);
     let vec = to_vec(&addr).unwrap();
-    println!("{:?}", vec);
+    println!("{vec:?}");
     assert_eq!(vec.len(), 5);
     let test_addr: Ipv4Addr = from_slice(&vec).unwrap();
     assert_eq!(addr, test_addr);
@@ -148,14 +148,21 @@ fn test_byte_string() {
     // to test in Travis.
 }
 
-/// This test checks that the keys of a map are sorted correctly, independently of the order of the
-/// input.
+/// This test checks that the keys of a map are sorted correctly per RFC 8949 bytewise
+/// lexicographic order, independently of the order of the input.
 #[test]
 fn test_key_order_transcode_map() {
-    // CBOR encoded {"a": 1, "b": 2}
-    let expected = [0xa2, 0x61, 0x61, 0x01, 0x61, 0x62, 0x02];
+    // Test with keys that demonstrate RFC 8949 ordering. For text strings, both RFC 8949 and
+    // RFC 7049 actually produce the same ordering due to CBOR's length encoding in the first byte.
+    // RFC 8949 order: "a" < "b" < "aa" (bytewise lexicographic of encoded bytes)
+    // - "a"  -> [0x61, 0x61]     (0x61 prefix for length 1)
+    // - "b"  -> [0x61, 0x62]     (0x61 prefix for length 1, then 0x62 > 0x61)
+    // - "aa" -> [0x62, 0x61, 0x61] (0x62 prefix for length 2, so 0x62 > 0x61)
+    let expected = [
+        0xa3, 0x61, 0x61, 0x01, 0x61, 0x62, 0x03, 0x62, 0x61, 0x61, 0x02,
+    ];
 
-    let data = vec![("b", 2), ("a", 1)];
+    let data = vec![("b", 3), ("aa", 2), ("a", 1)];
     let deserializer: MapDeserializer<'_, _, value::Error> = MapDeserializer::new(data.into_iter());
     let writer = BufWriter::new(Vec::new());
     let mut serializer = Serializer::new(writer);
@@ -194,6 +201,7 @@ fn test_non_unbound_list() {
 
 #[test]
 fn test_struct_canonical() {
+    // Simple test to verify basic struct field ordering
     #[derive(Serialize)]
     struct First {
         a: u32,
@@ -208,38 +216,75 @@ fn test_struct_canonical() {
     let first = First { a: 1, b: 2 };
     let second = Second { a: 1, b: 2 };
 
-    let first_bytes = serde_ipld_dagcbor::to_vec(&first).unwrap();
-    let second_bytes = serde_ipld_dagcbor::to_vec(&second).unwrap();
+    let first_bytes = serde_cbor_core::to_vec(&first).unwrap();
+    let second_bytes = serde_cbor_core::to_vec(&second).unwrap();
 
     assert_eq!(first_bytes, second_bytes);
-    // Do not only make sure that the order is the same, but also that it's correct.
+    // Verify the exact encoded order: "a", "b"
     assert_eq!(first_bytes, b"\xa2\x61a\x01\x61b\x02")
 }
 
+/// This test verifies RFC 8949 bytewise lexicographic ordering using examples inspired by the RFC.
+/// The keys are sorted by their encoded CBOR bytes. For text strings, this produces the same
+/// ordering as RFC 7049 length-first would, but our implementation achieves it through direct
+/// bytewise comparison of the encoded forms, not through a separate length-first algorithm.
+/// Expected order: "a" < "b" < "z" < "aa" < "bb" < "zz"
+/// - "a"  -> [0x61, 0x61]           (single char strings have 0x61 prefix)
+/// - "b"  -> [0x61, 0x62]           (0x61 == 0x61, then 0x62 > 0x61)
+/// - "z"  -> [0x61, 0x7a]           (0x61 == 0x61, then 0x7a > 0x62)
+/// - "aa" -> [0x62, 0x61, 0x61]     (two char strings have 0x62 prefix)
+/// - "bb" -> [0x62, 0x62, 0x62]     (0x62 == 0x62, then 0x62 > 0x61)
+/// - "zz" -> [0x62, 0x7a, 0x7a]     (0x62 == 0x62, then 0x7a > 0x62)
 #[test]
 fn test_struct_variant_canonical() {
-    // The `abc` is there to make sure it really follows the DAG-CBOR sorting order, which sorts by
-    // length of the keys first, then lexicographically. It means that `abc` sorts *after* `b`.
     #[derive(Serialize)]
     enum First {
-        Data { a: u8, b: u8, abc: u8 },
+        Data {
+            a: u8,
+            aa: u8,
+            b: u8,
+            bb: u8,
+            z: u8,
+            zz: u8,
+        },
     }
 
     #[derive(Serialize)]
     enum Second {
-        Data { b: u8, abc: u8, a: u8 },
+        Data {
+            zz: u8,
+            z: u8,
+            bb: u8,
+            b: u8,
+            aa: u8,
+            a: u8,
+        },
     }
 
-    let first = First::Data { a: 1, b: 2, abc: 3 };
-    let second = Second::Data { a: 1, b: 2, abc: 3 };
+    let first = First::Data {
+        a: 1,
+        aa: 2,
+        b: 3,
+        bb: 4,
+        z: 5,
+        zz: 6,
+    };
+    let second = Second::Data {
+        a: 1,
+        aa: 2,
+        b: 3,
+        bb: 4,
+        z: 5,
+        zz: 6,
+    };
 
-    let first_bytes = serde_ipld_dagcbor::to_vec(&first).unwrap();
-    let second_bytes = serde_ipld_dagcbor::to_vec(&second).unwrap();
+    let first_bytes = serde_cbor_core::to_vec(&first).unwrap();
+    let second_bytes = serde_cbor_core::to_vec(&second).unwrap();
 
     assert_eq!(first_bytes, second_bytes);
-    // Do not only make sure that the order is the same, but also that it's correct.
+    // Verify the exact encoded order: "a", "b", "z", "aa", "bb", "zz"
     assert_eq!(
         first_bytes,
-        b"\xa1\x64Data\xa3\x61a\x01\x61b\x02\x63abc\x03"
+        b"\xa1\x64Data\xa6\x61a\x01\x61b\x03\x61z\x05\x62aa\x02\x62bb\x04\x62zz\x06"
     )
 }

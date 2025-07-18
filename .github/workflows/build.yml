@@ -48,6 +48,3 @@ jobs:
 
       - name: Test with all features
         run: cargo test --all-targets --workspace --all-features
-
-      - name: Test no-cid-as-bytes feature
-        run: cargo test --all-targets --workspace --features no-cid-as-bytes
