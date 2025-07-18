@@ -67,7 +67,7 @@ fn test_numbers_large_negative() {
 #[test]
 fn test_bool() {
     let value: bool = de::from_slice(b"\xf4").unwrap();
-    assert_eq!(value, false);
+    assert!(!value);
 }
 
 #[test]

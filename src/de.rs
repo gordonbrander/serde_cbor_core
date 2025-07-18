@@ -207,13 +207,10 @@ impl<'de, R: dec::Read<'de>> Deserializer<R> {
         V: Visitor<'de>,
     {
         let tag = dec::TagStart::decode(&mut self.reader)?;
-
-        match tag.0 {
-            _ => Err(DecodeError::TypeMismatch {
-                name: "CBOR tag",
-                byte: tag.0 as u8,
-            }),
-        }
+        Err(DecodeError::TypeMismatch {
+            name: "CBOR tag",
+            byte: tag.0 as u8,
+        })
     }
 
     /// This method should be called after a value has been deserialized to ensure there is no
