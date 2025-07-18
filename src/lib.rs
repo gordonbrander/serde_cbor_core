@@ -5,7 +5,7 @@
 //! Add this to your `Cargo.toml`:
 //! ```toml
 //! [dependencies]
-//! serde_ipld_dagcbor = "0.1.0"
+//! serde_cbor_core = "0.1.0"
 //! ```
 //!
 //! Storing and loading Rust types is easy and requires only
@@ -40,14 +40,14 @@
 //!     // Write Ferris to the given file.
 //!     // Instead of a file you can use any type that implements `io::Write`
 //!     // like a HTTP body, database connection etc.
-//!     serde_ipld_dagcbor::to_writer(ferris_file, &ferris)?;
+//!     serde_cbor_core::to_writer(ferris_file, &ferris)?;
 //!
 //!     let tux_file = File::open("examples/tux.cbor")?;
 //!     let tux_reader = BufReader::new(tux_file);
 //!     // Load Tux from a file.
 //!     // Serde CBOR performs roundtrip serialization meaning that
 //!     // the data will not change in any way.
-//!     let tux: Mascot = serde_ipld_dagcbor::from_reader(tux_reader)?;
+//!     let tux: Mascot = serde_cbor_core::from_reader(tux_reader)?;
 //!
 //!     println!("{:?}", tux);
 //!     // prints: Mascot { name: "Tux", species: "penguin", year_of_birth: 1996 }
@@ -57,7 +57,7 @@
 //! ```
 //!
 //! There are a lot of options available to customize the format.
-//! To operate on untyped DAG-CBOR values have a look at the [`ipld_core::ipld::Ipld`] type.
+//! To operate on untyped CBOR values have a look at the [`cbor4ii::core::Value`] type.
 //!
 //! # Type-based Serialization and Deserialization
 //! Serde provides a mechanism for low boilerplate serialization & deserialization of values to and
@@ -69,19 +69,19 @@
 //! Read a general CBOR value with an unknown content.
 //!
 //! ```rust
-//! use serde_ipld_dagcbor::from_slice;
-//! use ipld_core::ipld::Ipld;
+//! use serde_cbor_core::from_slice;
+//! use cbor4ii::core::Value;
 //!
 //! let slice = b"\x82\x01\xa1aaab";
-//! let value: Ipld = from_slice(slice).unwrap();
-//! println!("{:?}", value); // List([Integer(1), Map({"a": String("b")})])
+//! let value: Value = from_slice(slice).unwrap();
+//! println!("{:?}", value); // Value::Array([Value::Integer(1), Value::Map({"a": Value::String("b")})])
 //! ```
 //!
 //! Serialize an object.
 //!
 //! ```rust
 //! use std::collections::BTreeMap;
-//! use serde_ipld_dagcbor::to_vec;
+//! use serde_cbor_core::to_vec;
 //!
 //! let mut programming_languages = BTreeMap::new();
 //! programming_languages.insert("rust", vec!["safe", "concurrent", "fast"]);
@@ -98,7 +98,7 @@
 //! ``` toml
 //! [dependencies]
 //! serde = { version = "1.0", default-features = false }
-//! serde_ipld_dagcbor = { version = "0.1.0", default-features = false }
+//! serde_cbor_core = { version = "0.1.0", default-features = false }
 //! ```
 //!
 //! Without the `std` feature the functions [from_reader], and [to_writer] are not exported.

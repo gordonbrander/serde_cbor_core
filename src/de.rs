@@ -23,7 +23,7 @@ use cbor4ii::core::utils::IoReader;
 /// Deserialize a `String`
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: Vec<u8> = vec![0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let value: String = de::from_slice(&v[..]).unwrap();
 /// assert_eq!(value, "foobar");
@@ -32,7 +32,7 @@ use cbor4ii::core::utils::IoReader;
 /// Deserialize a borrowed string with zero copies.
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: Vec<u8> = vec![0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let value: &str = de::from_slice(&v[..]).unwrap();
 /// assert_eq!(value, "foobar");
@@ -55,7 +55,7 @@ where
 /// Deserialize a `String`
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: Vec<u8> = vec![0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let value: String = de::from_reader(&v[..]).unwrap();
 /// assert_eq!(value, "foobar");
@@ -64,7 +64,7 @@ where
 /// Note that `from_reader` cannot borrow data:
 ///
 /// ```compile_fail
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: Vec<u8> = vec![0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let value: &str = de::from_reader(&v[..]).unwrap();
 /// assert_eq!(value, "foobar");
@@ -94,7 +94,7 @@ where
 /// Deserialize a `String`
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: &[u8] = &[0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let mut reader = std::io::Cursor::new(v);
 /// let value: String = de::from_reader_once(&mut reader).unwrap();
@@ -128,7 +128,7 @@ where
 /// Deserialize several `String` values
 ///
 /// ```
-/// # use serde_ipld_dagcbor::de;
+/// # use serde_cbor_core::de;
 /// let v: &[u8] = &[0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72];
 /// let mut reader = std::io::Cursor::new(v);
 /// let mut iter = de::iter_from_reader::<String, _>(&mut reader);
