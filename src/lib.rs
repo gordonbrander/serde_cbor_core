@@ -74,7 +74,7 @@
 //!
 //! let slice = b"\x82\x01\xa1aaab";
 //! let value: Value = from_slice(slice).unwrap();
-//! println!("{:?}", value); // Value::Array([Value::Integer(1), Value::Map({"a": Value::String("b")})])
+//! println!("{value:?}"); // Value::Array([Value::Integer(1), Value::Map({"a": Value::String("b")})])
 //! ```
 //!
 //! Serialize an object.
