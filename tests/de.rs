@@ -33,9 +33,8 @@ fn test_string3() {
 
 #[test]
 fn test_byte_string() {
-    let bytes = b"foobar".to_vec();
-    let bytes2: Vec<u8> = de::from_slice(&bytes).unwrap();
-    assert_eq!(bytes2, bytes);
+    let value: Value = de::from_slice(&[0x46, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72]).unwrap();
+    assert_eq!(value, Value::Bytes(b"foobar".to_vec()));
 }
 
 #[test]
@@ -73,7 +72,7 @@ fn test_bool() {
 
 #[test]
 fn test_trailing_bytes() {
-    let value: Result<u8, _> = de::from_slice(b"\xf4trailing");
+    let value: Result<Value, _> = de::from_slice(b"\xf4trailing");
     assert!(matches!(value.unwrap_err(), DecodeError::TrailingData));
 }
 
@@ -111,21 +110,21 @@ fn test_indefinite_list_error() {
 
 #[test]
 fn test_indefinite_string_error() {
-    let value: Result<String, _> =
+    let value: Result<Value, _> =
         de::from_slice(b"\x7f\x65Mary \x64Had \x62a \x67Little \x60\x64Lamb\xff");
     assert!(matches!(value.unwrap_err(), DecodeError::IndefiniteSize));
 }
 
 #[test]
 fn test_indefinite_byte_string_error() {
-    let value: Result<Vec<u8>, _> = de::from_slice(b"\x5f\x42\x01\x23\x42\x45\x67\xff");
+    let value: Result<Value, _> = de::from_slice(b"\x5f\x42\x01\x23\x42\x45\x67\xff");
     assert!(matches!(value.unwrap_err(), DecodeError::IndefiniteSize));
 }
 
 #[test]
 fn test_multiple_indefinite_strings_error() {
     let input = b"\x82\x7f\x65Mary \x64Had \x62a \x67Little \x60\x64Lamb\xff\x5f\x42\x01\x23\x42\x45\x67\xff";
-    let value: Result<String, _> = de::from_slice(input);
+    let value: Result<Value, _> = de::from_slice(input);
     assert!(matches!(value.unwrap_err(), DecodeError::IndefiniteSize));
 }
 
@@ -137,7 +136,7 @@ fn test_float() {
 
 #[test]
 fn test_rejected_tag() {
-    let ipld: Result<Vec<u8>, _> =
+    let ipld: Result<Value, _> =
         de::from_slice(&[0xd9, 0xd9, 0xf7, 0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72]);
     assert!(matches!(
         ipld.unwrap_err(),
