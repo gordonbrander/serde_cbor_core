@@ -288,3 +288,24 @@ fn test_struct_variant_canonical() {
         b"\xa1\x64Data\xa6\x61a\x01\x61b\x03\x61z\x05\x62aa\x02\x62bb\x04\x62zz\x06"
     )
 }
+
+#[test]
+fn test_integer_keys() {
+    let mut object = BTreeMap::new();
+    object.insert(1i32, "one".to_owned());
+    object.insert(10i32, "ten".to_owned());
+    object.insert(2i32, "two".to_owned());
+    let vec = to_vec(&object).unwrap();
+    let test_object: BTreeMap<i32, String> = from_slice(&vec[..]).unwrap();
+    assert_eq!(object, test_object);
+}
+
+#[test]
+fn test_boolean_keys() {
+    let mut object = BTreeMap::new();
+    object.insert(true, "true_value".to_owned());
+    object.insert(false, "false_value".to_owned());
+    let vec = to_vec(&object).unwrap();
+    let test_object: BTreeMap<bool, String> = from_slice(&vec[..]).unwrap();
+    assert_eq!(object, test_object);
+}
