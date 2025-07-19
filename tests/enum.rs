@@ -1,4 +1,4 @@
-use serde_cbor_core::{from_slice, to_vec, DecodeError};
+use serde_cbor_core::{DecodeError, from_slice, to_vec};
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

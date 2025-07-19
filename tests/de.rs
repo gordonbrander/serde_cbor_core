@@ -1,6 +1,6 @@
 use cbor4ii::core::Value;
 use serde::{Deserialize, Serialize};
-use serde_cbor_core::{de, to_vec, DecodeError};
+use serde_cbor_core::{DecodeError, de, to_vec};
 use serde_tuple::{Deserialize_tuple, Serialize_tuple};
 use std::collections::BTreeMap;
 use std::convert::Infallible;
@@ -552,7 +552,7 @@ fn test_default_values() {
         TestCase {
             hex: "80",
             expected: Expected::Err(
-                |err| matches!(err, DecodeError::Msg(ref m) if m == "invalid length 0, expected tuple struct Inner with 2 elements"),
+                |err| matches!(err, DecodeError::Msg(m) if m == "invalid length 0, expected tuple struct Inner with 2 elements"),
             ),
         },
     ];
@@ -605,14 +605,14 @@ fn test_default_values() {
         TestCase {
             hex: "a261630365696e6e6572a1616101",
             expected: Expected::Err(
-                |err| matches!(err, DecodeError::Msg(ref m) if m == "missing field `b`"),
+                |err| matches!(err, DecodeError::Msg(m) if m == "missing field `b`"),
             ),
         },
         // {"inner":{"a":1,"b":2,"c":3},"c":4} -> error because inner has too many elements
         TestCase {
             hex: "a261630465696e6e6572a3616101616202616303",
             expected: Expected::Err(
-                |err| matches!(err, DecodeError::Msg(ref m) if m == "unknown field `c`, expected `a` or `b`"),
+                |err| matches!(err, DecodeError::Msg(m) if m == "unknown field `c`, expected `a` or `b`"),
             ),
         },
         // {"inner":{"a":1,"b":2}} + "c":3 -> error because there's a trailing element
@@ -624,7 +624,7 @@ fn test_default_values() {
         TestCase {
             hex: "a165696e6e6572a3616101616202616303",
             expected: Expected::Err(
-                |err| matches!(err, DecodeError::Msg(ref m) if m == "unknown field `c`, expected `a` or `b`"),
+                |err| matches!(err, DecodeError::Msg(m) if m == "unknown field `c`, expected `a` or `b`"),
             ),
         },
     ];

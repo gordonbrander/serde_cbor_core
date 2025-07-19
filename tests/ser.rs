@@ -180,11 +180,7 @@ fn test_non_unbound_list() {
     let one_two_three_iter = iter::successors(
         Some(1),
         move |&num| {
-            if num < 3 {
-                Some(num + 1)
-            } else {
-                None
-            }
+            if num < 3 { Some(num + 1) } else { None }
         },
     );
 
