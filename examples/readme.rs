@@ -34,8 +34,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tux_file = File::open("examples/tux.cbor")?;
     let tux_reader = BufReader::new(tux_file);
     // Load Tux from a file.
-    // Serde IPLD DAG-CBOR performs roundtrip serialization meaning that
-    // the data will not change in any way.
+    // performs roundtrip serialization meaning that the data will not change in any way.
     let tux: Mascot = serde_cbor_core::from_reader(tux_reader)?;
 
     println!("{tux:?}");
