@@ -1,24 +1,14 @@
-Serde IPLD DAG-CBOR
-===================
+# serde_cbor_core
 
-[![Crates.io](https://img.shields.io/crates/v/serde_ipld_dagcbor.svg)](https://crates.io/crates/serde_ipld_dagcbor)
-[![Documentation](https://docs.rs/serde_ipld_dagcbor/badge.svg)](https://docs.rs/serde_ipld_dag_cbor)
+This is a [Serde](https://github.com/serde-rs/serde) implementation for [CBOR Core](https://datatracker-ietf-org.lucaspardue.com/doc/draft-rundgren-cbor-core/). It provides a deterministic encoding for CBOR, detailed [Section 4.2.1. of RFC 8949](https://datatracker.ietf.org/doc/html/rfc8949#core-det) and expanded on in the [IETF draft for CBOR Core](https://datatracker-ietf-org.lucaspardue.com/doc/draft-rundgren-cbor-core/).
 
-This is a [Serde] implementation for [DAG-CBOR]. It can be use in conjunction with [ipld-core].
+Deterministic encoding means the same CBOR will be encoded the same way, every time. This is useful when signing or hashing data, since it guarantees the same data will produce the same hash/sig.
 
-The underlying library for CBOR encoding/decoding is [cbor4ii] and the Serde implementation is also heavily based on their code.
+The underlying library for CBOR encoding/decoding is [cbor4ii](https://github.com/quininer/cbor4ii) and the Serde implementation is also heavily based on their code.
 
-This crate started as a fork of [serde_cbor], thanks everyone involved there.
+This crate started as a fork of [serde_ipld_dagcbor](https://github.com/ipld/serde_ipld_dagcbor). Many thanks to everyone involved there.
 
-[Serde]: https://github.com/serde-rs/serde
-[DAG-CBOR]: https://ipld.io/specs/codecs/dag-cbor/spec/
-[ipld-core]: https://github.com/ipld/rust-ipld-core
-[cbor4ii]: https://github.com/quininer/cbor4ii
-[serde_cbor]: https://github.com/pyfisch/cbor
-
-
-Usage
------
+## Usage
 
 Storing and loading Rust types is easy and requires only
 minimal modifications to the program code.
@@ -49,40 +39,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Write Ferris to the given file.
     // Instead of a file you can use any type that implements `io::Write`
     // like a HTTP body, database connection etc.
-    serde_ipld_dagcbor::to_writer(ferris_file, &ferris)?;
+    serde_cbor_core::to_writer(ferris_file, &ferris)?;
 
     let tux_file = File::open("examples/tux.cbor")?;
     let tux_reader = BufReader::new(tux_file);
     // Load Tux from a file.
-    // Serde IPLD DAG-CBOR performs roundtrip serialization meaning that
-    // the data will not change in any way.
-    let tux: Mascot = serde_ipld_dagcbor::from_reader(tux_reader)?;
+    // Performs roundtrip serialization meaning that the data will not change in any way.
+    let tux: Mascot = serde_cbor_core::from_reader(tux_reader)?;
 
-    println!("{:?}", tux);
+    println!("{tux:?}");
     // prints: Mascot { name: "Tux", species: "penguin", year_of_birth: 1996 }
 
     Ok(())
 }
 ```
 
-
-Features
---------
-
-### `codec`
-
-The `codec` feature is enabled by default, it provides the `Codec` trait, which enables encoding and decoding independent of the IPLD Codec. The minimum supported Rust version (MSRV) can significantly be reduced to 1.64 by disabling this feature.
-
-
-### `no-cid-as-bytes`
-
-Sometimes it is desired that a CID is not accidentally deserialized into bytes. This can happen because the intermediate serde data model does not retain enough information to be able to differentiate between a bytes container and a CID container when there is a conflicting choice to be made, as in the case of some enum cases. The `no-cid-as-bytes` feature can be enabled in order to error at runtime in such cases.
-
-The problem with that feature is, that it breaks Serde's derive attributes for [internally tagged enums](https://serde.rs/enum-representations.html#internally-tagged) (`#[serde(tag = "sometag")]`) and [untagged enums](https://serde.rs/enum-representations.html#untagged) (`#serde(untagged)`). If this feature is enabled and you still need similar functionality, you could implement a deserializer manually. Examples of how to do that are in the [enum example](examples/enums.rs).
-
-
-License
--------
+## License
 
 Licensed under either of
 
