@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 description = "CBOR Core/RFC 8949 deterministic encoding implementation for Serde"
 keywords = ["serde", "cbor", "serialization", "no_std"]
 categories = ["encoding"]
-edition = "2018"
+edition = "2024"
 
 [dependencies]
 cbor4ii = { version = "0.2.14", default-features = false, features = [
