@@ -136,10 +136,10 @@ fn test_float() {
 
 #[test]
 fn test_rejected_tag() {
-    let ipld: Result<Value, _> =
+    let value: Result<Value, _> =
         de::from_slice(&[0xd9, 0xd9, 0xf7, 0x66, 0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72]);
     assert!(matches!(
-        ipld.unwrap_err(),
+        value.unwrap_err(),
         DecodeError::TypeMismatch {
             name: "CBOR tag",
             byte: 0xf7
@@ -150,9 +150,9 @@ fn test_rejected_tag() {
 #[test]
 fn test_crazy_list() {
     let slice = b"\x86\x1b\x00\x00\x00\x1c\xbe\x99\x1d\xc7\x3b\x00\x7a\xcf\x51\xdc\x51\x70\xdb\x3a\x1b\x3a\x06\xdd\xf5\xf6\xfb\x41\x76\x5e\xb1\xf8\x00\x00\x00";
-    let ipld: Vec<Value> = de::from_slice(slice).unwrap();
+    let value: Vec<Value> = de::from_slice(slice).unwrap();
     assert_eq!(
-        ipld,
+        value,
         vec![
             Value::Integer(123456789959),
             Value::Integer(-34567897654325468),
@@ -217,8 +217,8 @@ fn test_unit() {
 #[test]
 fn test_variable_length_map_error() {
     let slice = b"\xbf\x67\x6d\x65\x73\x73\x61\x67\x65\x64\x70\x6f\x6e\x67\xff";
-    let ipld: Result<Value, _> = de::from_slice(slice);
-    assert!(matches!(ipld.unwrap_err(), DecodeError::IndefiniteSize));
+    let value: Result<Value, _> = de::from_slice(slice);
+    assert!(matches!(value.unwrap_err(), DecodeError::IndefiniteSize));
 }
 
 #[test]
